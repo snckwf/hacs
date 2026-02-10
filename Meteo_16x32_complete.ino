@@ -102,9 +102,14 @@ unsigned long lastWifiOkMs = 0;
 unsigned long lastStateServeMs = 0;
 unsigned long lastHealthMs = 0;
 unsigned long bootMs = 0;
+unsigned long g_meteoLastOkMs = 0;
+unsigned long g_wifiReconnectAtMs = 0;
+uint8_t g_meteoFailStreak = 0;
+bool g_otaStarted = false;
 
 constexpr unsigned long HEALTH_PERIOD_MS = 5000;
 constexpr unsigned long WIFI_GRACE_MS = 30000;
+constexpr unsigned long WIFI_RECONNECT_INTERVAL_MS = 12000;
 constexpr unsigned long HARD_RESTART_MS = 0;
 
 String OW_API_KEY = OW_API_KEY_DEFAULT;
@@ -455,6 +460,8 @@ bool fetchMeteo() {
   g_tempC = t;
   g_humidity = h;
   memcpy(g_icon, ic, 4);
+  g_meteoLastOkMs = millis();
+  g_meteoFailStreak = 0;
   updateNightFlag();
   return true;
 }
@@ -570,42 +577,81 @@ String stateJson() {
            "\"wifi_ok\":%s,\"ip\":\"%s\",\"rssi_dbm\":%s,\"datetime\":\"%s\","
            "\"mode\":\"%s\",\"preview_night\":%s,\"br_pct\":%u,\"ct\":\"%s\",\"ch\":\"%s\","
            "\"ds\":\"%s\",\"ns\":\"%s\",\"owm\":%u,\"arh\":%u,\"nbp\":%u,\"nbm\":%u,\"ndp\":%u,\"asp\":%u,"
-           "\"meteo_ok\":%s,\"icon\":\"%s\",\"temp_c\":%s,\"hum\":%s"
+           "\"meteo_ok\":%s,\"icon\":\"%s\",\"temp_c\":%s,\"hum\":%s,\"meteo_age_s\":%lu,\"meteo_fail_streak\":%u"
            "}",
            wifi_ok ? "true" : "false", ipbuf, rssiBuf, dt,
            g_isNight ? "NOTTE" : "GIORNO", g_forceNightPreview ? "true" : "false",
            brPctFrom255(g_brightness), ctHex, chHex, ds, ns,
            g_owIntervalMin, g_autoResetHours, g_nightBrightnessPct, g_nightBrightnessMin, g_nightDimPct, g_animSpeedPct,
-           g_meteoOk ? "true" : "false", g_icon, tempPart, humPart);
+           g_meteoOk ? "true" : "false", g_icon, tempPart, humPart,
+           g_meteoLastOkMs ? ((millis() - g_meteoLastOkMs) / 1000UL) : 0UL,
+           g_meteoFailStreak);
 
   lastStateServeMs = millis();
   return String(json);
 }
 
 const char INDEX_HTML[] PROGMEM = R"rawliteral(
-<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Meteo 16x32</title>
-<style>body{font-family:system-ui;background:#0b0d12;color:#e8eef6;margin:0;padding:16px}.card{max-width:900px;margin:auto;background:#141a22;border-radius:14px;padding:14px}.row{margin:10px 0}.mono{font-family:monospace}.btn{padding:8px 12px;border-radius:8px;border:0;background:#2c5bd8;color:white;cursor:pointer}</style>
-</head><body><div class="card"><h3>Meteo 16x32</h3>
-<div class="row">WiFi: <span id="wifi">...</span> | Meteo: <span id="meteo">...</span></div>
-<div class="row">Luminosità giorno <input id="br" type="range" min="1" max="100"><span id="brv" class="mono"></span>%</div>
-<div class="row">Notte % <input id="nbp" type="range" min="1" max="100"><span id="nbpv" class="mono"></span>%</div>
-<div class="row">Min notte <input id="nbm" type="range" min="1" max="80"><span id="nbmv" class="mono"></span></div>
-<div class="row">Dim notte % <input id="ndp" type="range" min="1" max="100"><span id="ndpv" class="mono"></span>%</div>
-<div class="row">Anim % <input id="asp" type="range" min="1" max="100"><span id="aspv" class="mono"></span>%</div>
-<div class="row">Temp <input id="ct" type="color"> Hum <input id="ch" type="color"></div>
-<div class="row">Giorno <input id="ds" type="time"> Notte <input id="ns" type="time"></div>
-<div class="row"><button class="btn" id="save">Salva</button> <button class="btn" id="pn">Preview NOTTE</button> <button class="btn" id="rst">Riavvia</button></div>
-<div class="row mono" id="msg">—</div></div>
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Meteo 16x32</title>
+<style>
+:root{--bg:#0b1020;--card:#141c31;--line:#273150;--txt:#ecf2ff;--mut:#97a6c7;--ok:#34d399;--bad:#fb7185;--acc:#60a5fa}
+*{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui;background:radial-gradient(1000px 500px at 10% -10%,#1e2b52,transparent),var(--bg);color:var(--txt);padding:14px}
+.wrap{max-width:980px;margin:auto}.top{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.card{background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02));border:1px solid var(--line);border-radius:16px;padding:14px;margin-top:10px;box-shadow:0 12px 30px rgba(0,0,0,.35)}
+.badge{padding:6px 10px;border-radius:999px;border:1px solid var(--line);font-size:12px;color:var(--mut);display:inline-flex;gap:8px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:860px){.grid{grid-template-columns:1fr}}
+.row{background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:12px;padding:10px}.line{display:flex;justify-content:space-between;gap:8px;margin-bottom:6px}
+.small{font-size:12px;color:var(--mut)} input[type=range]{width:100%;accent-color:var(--acc)} input[type=color],input[type=time],select{background:#0a1226;color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:8px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{border:1px solid var(--line);background:#1f2a46;color:var(--txt);padding:9px 12px;border-radius:10px;cursor:pointer}
+.btn.acc{background:#1f3a69;border-color:#2f5ca6}.btn.danger{background:#4a1f2f;border-color:#7a2f48}.mono{font-family:ui-monospace,Consolas,monospace}
+</style></head>
+<body><div class="wrap">
+  <div class="top"><h3 style="margin:0">Meteo 16x32</h3>
+    <div class="badge"><span class="dot" id="wDot"></span><span id="wifi">WiFi…</span></div>
+    <div class="badge"><span class="dot" id="mDot"></span><span id="meteoState">OpenWeather…</span></div>
+    <div class="badge mono" id="meta">--</div>
+  </div>
+  <div class="card">
+    <div class="grid">
+      <div class="row"><div class="line"><b>Luminosità giorno</b><span class="mono" id="brv">--</span></div><input id="br" type="range" min="1" max="100"></div>
+      <div class="row"><div class="line"><b>Luminosità notte %</b><span class="mono" id="nbpv">--</span></div><input id="nbp" type="range" min="1" max="100"></div>
+      <div class="row"><div class="line"><b>Minimo notte</b><span class="mono" id="nbmv">--</span></div><input id="nbm" type="range" min="1" max="80"></div>
+      <div class="row"><div class="line"><b>Dim notte %</b><span class="mono" id="ndpv">--</span></div><input id="ndp" type="range" min="1" max="100"></div>
+      <div class="row"><div class="line"><b>Velocità animazione %</b><span class="mono" id="aspv">--</span></div><input id="asp" type="range" min="1" max="100"></div>
+      <div class="row"><div class="line"><b>OpenWeather intervallo (min)</b><span class="mono" id="owmv">--</span></div><select id="owm"><option>1</option><option>5</option><option>10</option><option>15</option><option>30</option><option>60</option><option>120</option></select></div>
+      <div class="row"><div class="line"><b>Colori</b><span class="small">Temperatura / Umidità</span></div><input id="ct" type="color"> <input id="ch" type="color"></div>
+      <div class="row"><div class="line"><b>Orari</b><span class="small">Giorno / Notte</span></div><input id="ds" type="time"> <input id="ns" type="time"></div>
+    </div>
+    <div style="margin-top:12px" class="small">IP: <span class="mono" id="ip">--</span> · RSSI: <span class="mono" id="rssi">--</span> · Meteo: <span class="mono" id="meteo">--</span></div>
+    <div class="actions" style="margin-top:12px"><button class="btn" id="save">Salva</button><button class="btn acc" id="pn">Preview notte</button><button class="btn danger" id="rst">Riavvia ESP32</button><span class="small" id="msg">—</span></div>
+  </div>
+</div>
 <script>
-const $=id=>document.getElementById(id);
-function setUI(s){$('wifi').textContent=s.wifi_ok?('OK '+s.ip):'OFF';$('meteo').textContent=`${s.icon} T=${s.temp_c??'--'} H=${s.hum??'--'}`;
-$('br').value=s.br_pct;$('brv').textContent=s.br_pct;$('nbp').value=s.nbp;$('nbpv').textContent=s.nbp;$('nbm').value=s.nbm;$('nbmv').textContent=s.nbm;$('ndp').value=s.ndp;$('ndpv').textContent=s.ndp;$('asp').value=s.asp;$('aspv').textContent=s.asp;$('ct').value=s.ct;$('ch').value=s.ch;$('ds').value=s.ds;$('ns').value=s.ns;}
-async function load(){const r=await fetch('/state');setUI(await r.json());}
-async function save(){const p={br_pct:+$('br').value,nbp:+$('nbp').value,nbm:+$('nbm').value,ndp:+$('ndp').value,asp:+$('asp').value,ct:$('ct').value,ch:$('ch').value,ds:$('ds').value,ns:$('ns').value};const r=await fetch('/set',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});setUI(await r.json());$('msg').textContent='Salvato';}
-$('save').onclick=save;$('pn').onclick=async()=>{const r=await fetch('/previewNight',{method:'POST'});setUI(await r.json());};$('rst').onclick=()=>fetch('/restart',{method:'POST'});
-['br','nbp','nbm','ndp','asp'].forEach(id=>$(id).oninput=()=>$(id+'v').textContent=$(id).value);
+const $=id=>document.getElementById(id); let saveT=0;
+function dot(el,on){el.style.background=on?'var(--ok)':'var(--bad)'}
+function ui(s){
+ dot($('wDot'),!!s.wifi_ok);$('wifi').textContent=s.wifi_ok?`WiFi OK (${s.ip})`:'WiFi non connesso';
+ dot($('mDot'),!!s.meteo_ok);$('meteoState').textContent=s.meteo_ok?'OpenWeather OK':'OpenWeather offline';
+ $('meta').textContent=`${s.mode} · fail=${s.meteo_fail_streak} · age=${s.meteo_age_s}s`;
+ $('ip').textContent=s.ip||'--';$('rssi').textContent=(s.rssi_dbm==null)?'--':`${s.rssi_dbm} dBm`;
+ $('meteo').textContent=`${s.icon} T=${s.temp_c??'--'}°C H=${s.hum??'--'}%`;
+ $('br').value=s.br_pct;$('nbp').value=s.nbp;$('nbm').value=s.nbm;$('ndp').value=s.ndp;$('asp').value=s.asp;
+ $('brv').textContent=s.br_pct;$('nbpv').textContent=s.nbp;$('nbmv').textContent=s.nbm;$('ndpv').textContent=s.ndp;$('aspv').textContent=s.asp;
+ $('owm').value=String(s.owm);$('owmv').textContent=s.owm;$('ct').value=s.ct;$('ch').value=s.ch;$('ds').value=s.ds;$('ns').value=s.ns;
+}
+async function load(){const r=await fetch('/state',{cache:'no-store'});ui(await r.json());}
+async function save(){const p={br_pct:+$('br').value,nbp:+$('nbp').value,nbm:+$('nbm').value,ndp:+$('ndp').value,asp:+$('asp').value,owm:+$('owm').value,ct:$('ct').value,ch:$('ch').value,ds:$('ds').value,ns:$('ns').value};const r=await fetch('/set',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});ui(await r.json());$('msg').textContent='Salvato';setTimeout(()=>$('msg').textContent='—',1300)}
+function debounceSave(){clearTimeout(saveT);saveT=setTimeout(save,220)}
+['br','nbp','nbm','ndp','asp'].forEach(id=>{$(id).addEventListener('input',()=>{$(id+'v').textContent=$(id).value;debounceSave();})});
+['owm','ct','ch','ds','ns'].forEach(id=>$(id).addEventListener('change',debounceSave));
+$('save').onclick=save;$('pn').onclick=async()=>{const r=await fetch('/previewNight',{method:'POST'});ui(await r.json())};$('rst').onclick=()=>fetch('/restart',{method:'POST'});
 load();setInterval(load,2500);
-</script></body></html>)rawliteral";
+</script></body></html>
+)rawliteral";
 
 static bool argOrJsonStr(const String& key, String& out) {
   if (server.hasArg(key)) { out = server.arg(key); return true; }
@@ -693,13 +739,24 @@ void setupOTA() {
 }
 
 void wifiEnsureConnected() {
-  if (WiFi.status() == WL_CONNECTED) { lastWifiOkMs = millis(); return; }
-  if (millis() - lastWifiOkMs > WIFI_GRACE_MS) {
+  if (WiFi.status() == WL_CONNECTED) {
+    lastWifiOkMs = millis();
+    if (!g_otaStarted) {
+      setupOTA();
+      g_otaStarted = true;
+    }
+    return;
+  }
+
+  if (millis() < g_wifiReconnectAtMs) return;
+
+  const bool longOffline = (millis() - lastWifiOkMs) > WIFI_GRACE_MS;
+  if (longOffline) {
     WiFi.disconnect(true, true);
     delay(80);
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
-    lastWifiOkMs = millis();
   }
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  g_wifiReconnectAtMs = millis() + WIFI_RECONNECT_INTERVAL_MS;
 }
 
 void healthCheck() {
@@ -804,7 +861,7 @@ void setup() {
   }
   lastWifiOkMs = millis();
 
-  if (WiFi.status() == WL_CONNECTED) setupOTA();
+  if (WiFi.status() == WL_CONNECTED) { setupOTA(); g_otaStarted = true; }
 
   configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org");
   for (int i = 0; i < 30; i++) {
@@ -825,10 +882,14 @@ void loop() {
   ArduinoOTA.handle();
   server.handleClient();
 
-  const unsigned long intervalMs = static_cast<unsigned long>(g_owIntervalMin) * 60UL * 1000UL;
+  const unsigned long normalIntervalMs = static_cast<unsigned long>(g_owIntervalMin) * 60UL * 1000UL;
+  const unsigned long retryIntervalMs = 60000UL;
+  const unsigned long intervalMs = g_meteoOk ? normalIntervalMs : retryIntervalMs;
   if (millis() - meteoLastMs >= intervalMs) {
     meteoLastMs = millis();
-    g_meteoOk = fetchMeteo();
+    const bool ok = fetchMeteo();
+    g_meteoOk = ok;
+    if (!ok && g_meteoFailStreak < 250) g_meteoFailStreak++;
     g_dirty = true;
   }
 
