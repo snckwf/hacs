@@ -71,6 +71,8 @@ bool g_isNight = false;
 
 uint16_t g_owIntervalMin = 10;
 uint16_t g_autoResetHours = 0;
+uint8_t g_iconPosX = 1;
+uint8_t g_iconPosY = 1;
 
 bool g_forceNightPreview = false;
 unsigned long g_forceNightUntilMs = 0;
@@ -263,6 +265,8 @@ void loadPrefs() {
   g_nightStartMin = prefs.getUShort("ns", g_nightStartMin);
   g_owIntervalMin = prefs.getUShort("owm", g_owIntervalMin);
   g_autoResetHours = prefs.getUShort("arh", g_autoResetHours);
+  g_iconPosX = prefs.getUChar("ix", g_iconPosX);
+  g_iconPosY = prefs.getUChar("iy", g_iconPosY);
   g_nightBrightnessPct = prefs.getUChar("nbp", g_nightBrightnessPct);
   g_nightBrightnessMin = prefs.getUChar("nbm", g_nightBrightnessMin);
   g_nightDimPct = prefs.getUChar("ndp", g_nightDimPct);
@@ -277,6 +281,8 @@ void loadPrefs() {
   g_nightBrightnessMin = constrain(g_nightBrightnessMin, static_cast<uint8_t>(1), static_cast<uint8_t>(80));
   g_nightDimPct = constrain(g_nightDimPct, static_cast<uint8_t>(1), static_cast<uint8_t>(100));
   g_animSpeedPct = constrain(g_animSpeedPct, static_cast<uint8_t>(1), static_cast<uint8_t>(100));
+  g_iconPosX = constrain(g_iconPosX, static_cast<uint8_t>(0), static_cast<uint8_t>(MATRIX_W - 1));
+  g_iconPosY = constrain(g_iconPosY, static_cast<uint8_t>(0), static_cast<uint8_t>(MATRIX_H - 1));
   if (g_brightness < 1) g_brightness = 1;
 }
 
@@ -288,6 +294,7 @@ void savePrefs() {
   prefs.putUChar("br0", g_colBg.r);  prefs.putUChar("bg0", g_colBg.g);  prefs.putUChar("bb0", g_colBg.b);
   prefs.putUShort("ds", g_dayStartMin); prefs.putUShort("ns", g_nightStartMin);
   prefs.putUShort("owm", g_owIntervalMin); prefs.putUShort("arh", g_autoResetHours);
+  prefs.putUChar("ix", g_iconPosX); prefs.putUChar("iy", g_iconPosY);
   prefs.putUChar("nbp", g_nightBrightnessPct); prefs.putUChar("nbm", g_nightBrightnessMin);
   prefs.putUChar("ndp", g_nightDimPct); prefs.putUChar("asp", g_animSpeedPct);
   prefs.end();
@@ -643,7 +650,7 @@ String stateJson() {
            "\"wifi_ok\":%s,\"ip\":\"%s\",\"rssi_dbm\":%s,\"datetime\":\"%s\","
            "\"mode\":\"%s\",\"preview_night\":%s,\"br_pct\":%u,\"ct\":\"%s\",\"ch\":\"%s\","
            "\"ds\":\"%s\",\"ns\":\"%s\",\"owm\":%u,\"arh\":%u,\"nbp\":%u,\"nbm\":%u,\"ndp\":%u,\"asp\":%u,"
-           "\"meteo_ok\":%s,\"icon\":\"%s\",\"temp_c\":%s,\"hum\":%s,\"meteo_age_s\":%lu,\"meteo_fail_streak\":%u"
+           "\"meteo_ok\":%s,\"icon\":\"%s\",\"temp_c\":%s,\"hum\":%s,\"meteo_age_s\":%lu,\"meteo_fail_streak\":%u,\"icon_x\":%u,\"icon_y\":%u"
            "}",
            wifi_ok ? "true" : "false", ipbuf, rssiBuf, dt,
            g_isNight ? "NOTTE" : "GIORNO", g_forceNightPreview ? "true" : "false",
@@ -651,7 +658,8 @@ String stateJson() {
            g_owIntervalMin, g_autoResetHours, g_nightBrightnessPct, g_nightBrightnessMin, g_nightDimPct, g_animSpeedPct,
            g_meteoOk ? "true" : "false", g_icon, tempPart, humPart,
            g_meteoLastOkMs ? ((millis() - g_meteoLastOkMs) / 1000UL) : 0UL,
-           g_meteoFailStreak);
+           g_meteoFailStreak,
+           g_iconPosX, g_iconPosY);
 
   lastStateServeMs = millis();
   return String(json);
@@ -691,6 +699,8 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       <div class="row"><div class="line"><b>OpenWeather intervallo (min)</b><span class="mono" id="owmv">--</span></div><select id="owm"><option>1</option><option>5</option><option>10</option><option>15</option><option>30</option><option>60</option><option>120</option></select></div>
       <div class="row"><div class="line"><b>Colori</b><span class="small">Temperatura / Umidità</span></div><input id="ct" type="color"> <input id="ch" type="color"></div>
       <div class="row"><div class="line"><b>Orari</b><span class="small">Giorno / Notte</span></div><input id="ds" type="time"> <input id="ns" type="time"></div>
+      <div class="row"><div class="line"><b>Posizione icona X</b><span class="mono" id="ixv">--</span></div><input id="ix" type="range" min="0" max="31"></div>
+      <div class="row"><div class="line"><b>Posizione icona Y</b><span class="mono" id="iyv">--</span></div><input id="iy" type="range" min="0" max="15"></div>
     </div>
     <div style="margin-top:12px" class="small">IP: <span class="mono" id="ip">--</span> · RSSI: <span class="mono" id="rssi">--</span> · Meteo: <span class="mono" id="meteo">--</span></div>
     <div class="actions" style="margin-top:12px"><button class="btn" id="save">Salva</button><button class="btn acc" id="pn">Preview notte</button><button class="btn danger" id="rst">Riavvia ESP32</button><span class="small" id="msg">—</span></div>
@@ -707,12 +717,12 @@ function ui(s){
  $('meteo').textContent=`${s.icon} T=${s.temp_c??'--'}°C H=${s.hum??'--'}%`;
  $('br').value=s.br_pct;$('nbp').value=s.nbp;$('nbm').value=s.nbm;$('ndp').value=s.ndp;$('asp').value=s.asp;
  $('brv').textContent=s.br_pct;$('nbpv').textContent=s.nbp;$('nbmv').textContent=s.nbm;$('ndpv').textContent=s.ndp;$('aspv').textContent=s.asp;
- $('owm').value=String(s.owm);$('owmv').textContent=s.owm;$('ct').value=s.ct;$('ch').value=s.ch;$('ds').value=s.ds;$('ns').value=s.ns;
+ $('owm').value=String(s.owm);$('owmv').textContent=s.owm;$('ct').value=s.ct;$('ch').value=s.ch;$('ds').value=s.ds;$('ns').value=s.ns;$('ix').value=s.icon_x;$('iy').value=s.icon_y;$('ixv').textContent=s.icon_x;$('iyv').textContent=s.icon_y;
 }
 async function load(){const r=await fetch('/state',{cache:'no-store'});ui(await r.json());}
-async function save(){const p={br_pct:+$('br').value,nbp:+$('nbp').value,nbm:+$('nbm').value,ndp:+$('ndp').value,asp:+$('asp').value,owm:+$('owm').value,ct:$('ct').value,ch:$('ch').value,ds:$('ds').value,ns:$('ns').value};const r=await fetch('/set',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});ui(await r.json());$('msg').textContent='Salvato';setTimeout(()=>$('msg').textContent='—',1300)}
+async function save(){const p={br_pct:+$('br').value,nbp:+$('nbp').value,nbm:+$('nbm').value,ndp:+$('ndp').value,asp:+$('asp').value,owm:+$('owm').value,ct:$('ct').value,ch:$('ch').value,ds:$('ds').value,ns:$('ns').value,ix:+$('ix').value,iy:+$('iy').value};const r=await fetch('/set',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});ui(await r.json());$('msg').textContent='Salvato';setTimeout(()=>$('msg').textContent='—',1300)}
 function debounceSave(){clearTimeout(saveT);saveT=setTimeout(save,220)}
-['br','nbp','nbm','ndp','asp'].forEach(id=>{$(id).addEventListener('input',()=>{$(id+'v').textContent=$(id).value;debounceSave();})});
+['br','nbp','nbm','ndp','asp','ix','iy'].forEach(id=>{$(id).addEventListener('input',()=>{$(id+'v').textContent=$(id).value;debounceSave();})});
 ['owm','ct','ch','ds','ns'].forEach(id=>$(id).addEventListener('change',debounceSave));
 $('save').onclick=save;$('pn').onclick=async()=>{const r=await fetch('/previewNight',{method:'POST'});ui(await r.json())};$('rst').onclick=()=>fetch('/restart',{method:'POST'});
 load();setInterval(load,2500);
@@ -765,6 +775,8 @@ void handleSet() {
   if (argOrJsonStr("ns", s)) g_nightStartMin = hhmmToMinSafe(s, g_nightStartMin);
   if (argOrJsonInt("owm", v)) g_owIntervalMin = constrain(v, 1, 120);
   if (argOrJsonInt("arh", v)) g_autoResetHours = constrain(v, 0, 168);
+  if (argOrJsonInt("ix", v)) g_iconPosX = constrain(v, 0, MATRIX_W - 1);
+  if (argOrJsonInt("iy", v)) g_iconPosY = constrain(v, 0, MATRIX_H - 1);
 
   savePrefs();
   updateNightFlag();
@@ -871,11 +883,11 @@ void renderIfNeeded() {
   constexpr int RIGHT_EDGE = MATRIX_W - 1;
   const int textX0 = MATRIX_W - TEXT_W;
 
-  int iconX = (textX0 - 16) / 2;
-  if (iconX < 0) iconX = 0;
+  const int iconX = g_iconPosX;
+  const int iconY = g_iconPosY;
 
   const WeatherIconKind iconKind = pickIcon();
-  drawWeatherIcon16x16(iconX, 1, iconKind, g_isNight, (alpha8 >= 128) ? 1 : 0);
+  drawWeatherIcon16x16(iconX, iconY, iconKind, g_isNight, (alpha8 >= 128) ? 1 : 0);
 
   char ts[8];
   if (t == 99999) strcpy(ts, "--"); else snprintf(ts, sizeof(ts), "%d", t);
