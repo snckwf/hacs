@@ -18,10 +18,10 @@ struct Icon16x16PalAnim;
 // Secrets (metti in secrets.h e non versionare)
 // =========================
 #ifndef WIFI_SSID
-#define WIFI_SSID "YOUR_WIFI"
+#define WIFI_SSID "eMGi"
 #endif
 #ifndef WIFI_PASS
-#define WIFI_PASS "YOUR_PASS"
+#define WIFI_PASS "ernestino"
 #endif
 #ifndef OTA_HOSTNAME
 #define OTA_HOSTNAME "Meteo16x32"
@@ -30,7 +30,7 @@ struct Icon16x16PalAnim;
 #define OTA_PASSWORD "CHANGE_ME"
 #endif
 #ifndef OW_API_KEY_DEFAULT
-#define OW_API_KEY_DEFAULT "YOUR_OPENWEATHER_KEY"
+#define OW_API_KEY_DEFAULT "39828ee3aa5b52908315441eab40c2af"
 #endif
 #ifndef OW_LAT_DEFAULT
 #define OW_LAT_DEFAULT "45.80900"
