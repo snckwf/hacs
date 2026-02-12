@@ -26,9 +26,6 @@ struct Icon16x16PalAnim;
 #ifndef OTA_HOSTNAME
 #define OTA_HOSTNAME "Meteo16x32"
 #endif
-#ifndef OTA_PASSWORD
-#define OTA_PASSWORD "CHANGE_ME"
-#endif
 #ifndef OW_API_KEY_DEFAULT
 #define OW_API_KEY_DEFAULT "39828ee3aa5b52908315441eab40c2af"
 #endif
@@ -731,7 +728,6 @@ void setupWeb() {
 
 void setupOTA() {
   ArduinoOTA.setHostname(OTA_HOSTNAME);
-  ArduinoOTA.setPassword(OTA_PASSWORD);
   ArduinoOTA.onStart([]() { FastLED.clear(true); });
   ArduinoOTA.onEnd([]() { ESP.restart(); });
   ArduinoOTA.onError([](ota_error_t error) { (void)error; });
