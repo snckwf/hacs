@@ -2,8 +2,6 @@
 // ESP32-WROOM32 + FastLED + WebServer + NVS + NTP + OpenWeather + ArduinoOTA
 // Matrice 16x32 = 2 pannelli 8x32 (alto + basso)
 
-struct Icon16x16PalAnim;
-
 #include <WiFi.h>
 #include <WebServer.h>
 #include <Preferences.h>
@@ -115,107 +113,19 @@ String OW_LON = OW_LON_DEFAULT;
 String OW_LANG = "it";
 String OW_UNITS = "metric";
 
-struct Icon16x16PalAnim {
-  const uint8_t* f0;
-  const uint8_t* f1;
-  const CRGB* pal;
-};
-
 constexpr uint8_t ICON_W = 16;
 constexpr uint8_t ICON_H = 16;
-
-const CRGB PAL_DAY[8] = {
-  CRGB::Black,
-  CRGB::White,
-  CRGB(220, 230, 245),
-  CRGB(255, 220, 80),
-  CRGB(120, 200, 255),
-  CRGB(255, 235, 40),
-  CRGB(235, 245, 255),
-  CRGB(170, 180, 195)
+enum WeatherIconKind : uint8_t {
+  WICON_CLEAR,
+  WICON_FEW_CLOUDS,
+  WICON_CLOUDY,
+  WICON_OVERCAST,
+  WICON_FOG,
+  WICON_RAIN,
+  WICON_HEAVY_RAIN,
+  WICON_THUNDER,
+  WICON_SNOW
 };
-
-const CRGB PAL_NIGHT[8] = {
-  CRGB::Black,
-  CRGB::White,
-  CRGB(190, 210, 245),
-  CRGB(220, 235, 255),
-  CRGB(80, 140, 230),
-  CRGB(255, 235, 40),
-  CRGB(235, 245, 255),
-  CRGB(125, 160, 220)
-};
-
-// Icone semplificate (16x16) per mantenere sketch leggero ma completo.
-const uint8_t ICON_CLEAR_F0[256] PROGMEM = {
-  0,0,0,0,0,0,0,3,3,0,0,0,0,0,0,0, 0,0,0,0,0,0,3,3,3,3,0,0,0,0,0,0,
-  0,0,0,0,0,3,3,3,3,3,3,0,0,0,0,0, 0,0,0,0,3,3,3,3,3,3,3,3,0,0,0,0,
-  0,0,0,3,3,3,3,3,3,3,3,3,3,0,0,0, 0,0,3,3,3,3,3,3,3,3,3,3,3,3,0,0,
-  0,0,3,3,3,3,3,3,3,3,3,3,3,3,0,0, 0,3,3,3,3,3,3,3,3,3,3,3,3,3,3,0,
-  0,3,3,3,3,3,3,3,3,3,3,3,3,3,3,0, 0,0,3,3,3,3,3,3,3,3,3,3,3,3,0,0,
-  0,0,3,3,3,3,3,3,3,3,3,3,3,3,0,0, 0,0,0,3,3,3,3,3,3,3,3,3,3,0,0,0,
-  0,0,0,0,3,3,3,3,3,3,3,3,0,0,0,0, 0,0,0,0,0,3,3,3,3,3,3,0,0,0,0,0,
-  0,0,0,0,0,0,0,3,3,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-};
-const uint8_t ICON_CLEAR_F1[256] PROGMEM = { // leggero pulse
-  0,0,0,0,0,0,3,3,3,3,0,0,0,0,0,0, 0,0,0,0,0,3,3,3,3,3,3,0,0,0,0,0,
-  0,0,0,0,3,3,3,3,3,3,3,3,0,0,0,0, 0,0,0,3,3,3,3,3,3,3,3,3,3,0,0,0,
-  0,0,3,3,3,3,3,3,3,3,3,3,3,3,0,0, 0,3,3,3,3,3,3,3,3,3,3,3,3,3,3,0,
-  0,3,3,3,3,3,3,3,3,3,3,3,3,3,3,0, 0,3,3,3,3,3,3,3,3,3,3,3,3,3,3,0,
-  0,3,3,3,3,3,3,3,3,3,3,3,3,3,3,0, 0,3,3,3,3,3,3,3,3,3,3,3,3,3,3,0,
-  0,0,3,3,3,3,3,3,3,3,3,3,3,3,0,0, 0,0,0,3,3,3,3,3,3,3,3,3,3,0,0,0,
-  0,0,0,0,3,3,3,3,3,3,3,3,0,0,0,0, 0,0,0,0,0,3,3,3,3,3,3,0,0,0,0,0,
-  0,0,0,0,0,0,3,3,3,3,0,0,0,0,0,0, 0,0,0,0,0,0,0,3,3,0,0,0,0,0,0,0
-};
-
-const uint8_t ICON_CLOUD_F0[256] PROGMEM = {
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,2,2,0,0,0,0,0,0,0,
-  0,0,0,0,0,0,2,2,2,2,0,0,0,0,0,0, 0,0,0,0,0,2,2,2,2,2,2,0,0,0,0,0,
-  0,0,0,0,2,2,2,2,2,2,2,2,0,0,0,0, 0,0,0,2,2,2,2,2,2,2,2,2,2,0,0,0,
-  0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0, 0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0,
-  0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0, 0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-};
-const uint8_t ICON_CLOUD_F1[256] PROGMEM = {
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,2,2,2,0,0,0,0,0,0,0,
-  0,0,0,0,0,2,2,2,2,2,0,0,0,0,0,0, 0,0,0,0,2,2,2,2,2,2,2,0,0,0,0,0,
-  0,0,0,2,2,2,2,2,2,2,2,2,0,0,0,0, 0,0,2,2,2,2,2,2,2,2,2,2,2,0,0,0,
-  0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0, 0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,
-  0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-};
-
-const uint8_t ICON_RAIN_F0[256] PROGMEM = {
-  0,0,0,0,0,0,0,2,2,0,0,0,0,0,0,0, 0,0,0,0,0,0,2,2,2,2,0,0,0,0,0,0,
-  0,0,0,0,0,2,2,2,2,2,2,0,0,0,0,0, 0,0,0,0,2,2,2,2,2,2,2,2,0,0,0,0,
-  0,0,0,2,2,2,2,2,2,2,2,2,2,0,0,0, 0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0,
-  0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0, 0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,4,0,0,4,0,0,4,0,0,4,0,0,0,
-  0,0,0,0,0,4,0,0,4,0,0,4,0,0,4,0, 0,0,4,0,0,0,4,0,0,4,0,0,4,0,0,0,
-  0,0,0,0,4,0,0,4,0,0,4,0,0,4,0,0, 0,0,0,4,0,0,4,0,0,4,0,0,4,0,0,0,
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-};
-const uint8_t ICON_RAIN_F1[256] PROGMEM = {
-  0,0,0,0,0,0,0,2,2,0,0,0,0,0,0,0, 0,0,0,0,0,0,2,2,2,2,0,0,0,0,0,0,
-  0,0,0,0,0,2,2,2,2,2,2,0,0,0,0,0, 0,0,0,0,2,2,2,2,2,2,2,2,0,0,0,0,
-  0,0,0,2,2,2,2,2,2,2,2,2,2,0,0,0, 0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0,
-  0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0, 0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,4,0,0,4,0,0,4,0,0,4,0,0,
-  0,0,0,4,0,0,4,0,0,4,0,0,4,0,0,0, 0,0,0,0,0,4,0,0,4,0,0,4,0,0,4,0,
-  0,0,4,0,0,0,4,0,0,4,0,0,4,0,0,0, 0,0,0,0,4,0,0,4,0,0,4,0,0,4,0,0,
-  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-};
-
-const Icon16x16PalAnim ICON_DAY_CLEAR = { ICON_CLEAR_F0, ICON_CLEAR_F1, PAL_DAY };
-const Icon16x16PalAnim ICON_NIGHT_CLEAR = { ICON_CLEAR_F0, ICON_CLEAR_F1, PAL_NIGHT };
-const Icon16x16PalAnim ICON_DAY_CLOUD = { ICON_CLOUD_F0, ICON_CLOUD_F1, PAL_DAY };
-const Icon16x16PalAnim ICON_NIGHT_CLOUD = { ICON_CLOUD_F0, ICON_CLOUD_F1, PAL_NIGHT };
-const Icon16x16PalAnim ICON_DAY_RAIN = { ICON_RAIN_F0, ICON_RAIN_F1, PAL_DAY };
-const Icon16x16PalAnim ICON_NIGHT_RAIN = { ICON_RAIN_F0, ICON_RAIN_F1, PAL_NIGHT };
 
 // =========================
 // Utils
@@ -472,22 +382,186 @@ uint8_t computeAlpha8() {
   return static_cast<uint8_t>((a * 255UL) / half);
 }
 
-static inline uint8_t iconPix16(const uint8_t* frame, const int x, const int y) {
-  return pgm_read_byte(frame + y * ICON_W + x);
+static inline void blendPixel(const int x, const int y, const CRGB& c) {
+  if (x < 0 || x >= MATRIX_W || y < 0 || y >= MATRIX_H) return;
+  leds[XY(x, y)] += c;
 }
 
-static inline void drawIcon16x16Crossfade(const int x0, const int y0, const Icon16x16PalAnim* icon, const uint8_t alpha8, const CRGB& bg) {
-  for (int y = 0; y < ICON_H; y++) {
-    for (int x = 0; x < ICON_W; x++) {
-      const uint8_t ia = iconPix16(icon->f0, x, y);
-      const uint8_t ib = iconPix16(icon->f1, x, y);
-      const CRGB ca = (ia == 0) ? bg : icon->pal[ia];
-      const CRGB cb = (ib == 0) ? bg : icon->pal[ib];
-      CRGB c = blend(ca, cb, alpha8);
-      if (g_isNight) c = scaleColorPct(c, g_nightDimPct);
-      if (c != bg) setPixel(x0 + x, y0 + y, c);
+static inline void drawCircleFilled(const int cx, const int cy, const int r, const CRGB& c) {
+  for (int y = -r; y <= r; y++) {
+    for (int x = -r; x <= r; x++) {
+      if (x * x + y * y <= r * r) blendPixel(cx + x, cy + y, c);
     }
-    yield();
+  }
+}
+
+static inline void drawCircleOutline(const int cx, const int cy, const int r, const CRGB& c) {
+  for (int y = -r; y <= r; y++) {
+    for (int x = -r; x <= r; x++) {
+      const int d = x * x + y * y;
+      if (d <= r * r && d >= (r - 1) * (r - 1)) blendPixel(cx + x, cy + y, c);
+    }
+  }
+}
+
+static inline void drawCloudLayer(const int x0, const int y0, const uint8_t frame, const uint8_t darknessPct) {
+  const CRGB base = scaleColorPct(CRGB(210, 220, 235), darknessPct);
+  const CRGB shade = scaleColorPct(CRGB(145, 160, 185), darknessPct);
+  const CRGB hi = scaleColorPct(CRGB(245, 248, 255), darknessPct);
+
+  drawCircleFilled(x0 + 4 + (frame ? 1 : 0), y0 + 8, 3, base);
+  drawCircleFilled(x0 + 8, y0 + 6, 4, base);
+  drawCircleFilled(x0 + 12 - (frame ? 1 : 0), y0 + 8, 3, base);
+  for (int y = 8; y <= 11; y++) {
+    for (int x = 3; x <= 13; x++) blendPixel(x0 + x, y0 + y, base);
+  }
+  for (int y = 10; y <= 12; y++) for (int x = 3; x <= 13; x++) blendPixel(x0 + x, y0 + y, shade);
+  for (int x = 5; x <= 11; x++) blendPixel(x0 + x, y0 + 6, hi);
+}
+
+static inline uint8_t moonPhaseFromDate() {
+  if (!timeIsValid()) return 2;
+  time_t now = time(nullptr);
+  struct tm t {};
+  localtime_r(&now, &t);
+  const uint8_t day = static_cast<uint8_t>(t.tm_mday);
+  return (day % 8);
+}
+
+static inline void drawMoonPhase16(const int x0, const int y0, const uint8_t phase, const uint8_t frame) {
+  const CRGB moon = CRGB(220, 232, 255);
+  const CRGB glow = CRGB(90, 130, 200);
+  drawCircleFilled(x0 + 5, y0 + 5, 4, glow);
+  drawCircleFilled(x0 + 5, y0 + 5, 3, moon);
+
+  int maskOffset = 0;
+  switch (phase) {
+    case 0: maskOffset = 0; break;      // new
+    case 1: maskOffset = -2; break;     // waxing crescent
+    case 2: maskOffset = -1; break;     // first quarter
+    case 3: maskOffset = 1; break;      // waxing gibbous
+    case 4: maskOffset = 4; break;      // full
+    case 5: maskOffset = 1; break;      // waning gibbous
+    case 6: maskOffset = -1; break;     // last quarter
+    default: maskOffset = -2; break;    // waning crescent
+  }
+  if (phase != 4) {
+    drawCircleFilled(x0 + 5 + maskOffset + (frame ? 1 : 0), y0 + 5, 3, CRGB::Black);
+  }
+  drawCircleOutline(x0 + 5, y0 + 5, 3, CRGB(240, 245, 255));
+}
+
+static inline void drawSun16(const int x0, const int y0, const uint8_t frame) {
+  const CRGB core = CRGB(255, 208, 64);
+  const CRGB ring = CRGB(255, 150, 32);
+  const int cx = x0 + 5;
+  const int cy = y0 + 5;
+  drawCircleFilled(cx, cy, 3, core);
+  drawCircleOutline(cx, cy, 4, ring);
+  const int r1 = frame ? 6 : 5;
+  const int r2 = frame ? 2 : 3;
+  for (int i = 0; i < 8; i++) {
+    const float ang = i * 0.7853982f;
+    blendPixel(cx + static_cast<int>(cosf(ang) * r1), cy + static_cast<int>(sinf(ang) * r1), ring);
+    blendPixel(cx + static_cast<int>(cosf(ang) * r2), cy + static_cast<int>(sinf(ang) * r2), CRGB(255, 230, 128));
+  }
+}
+
+static inline void drawRainDrops16(const int x0, const int y0, const uint8_t frame, const uint8_t count, const uint8_t len) {
+  for (uint8_t i = 0; i < count; i++) {
+    const int xx = x0 + 4 + i * 2;
+    const int yy = y0 + 10 + ((i + frame) % 3);
+    for (uint8_t k = 0; k < len; k++) blendPixel(xx, yy + k, CRGB(90, 170, 255));
+  }
+}
+
+static inline void drawSnow16(const int x0, const int y0, const uint8_t frame) {
+  const int ys = y0 + 10 + (frame ? 1 : 0);
+  const int pos[4] = {4, 7, 10, 13};
+  for (int i = 0; i < 4; i++) {
+    const int x = x0 + pos[i] - ((frame && (i % 2)) ? 1 : 0);
+    blendPixel(x, ys + (i % 2), CRGB::White);
+    blendPixel(x - 1, ys + (i % 2), CRGB(180, 215, 255));
+    blendPixel(x + 1, ys + (i % 2), CRGB(180, 215, 255));
+    blendPixel(x, ys - 1 + (i % 2), CRGB(180, 215, 255));
+    blendPixel(x, ys + 1 + (i % 2), CRGB(180, 215, 255));
+  }
+}
+
+static inline void drawFog16(const int x0, const int y0, const uint8_t frame) {
+  for (int y = 9; y <= 13; y += 2) {
+    for (int x = 2; x <= 14; x++) {
+      if (((x + y + frame) % 3) != 0) blendPixel(x0 + x, y0 + y, CRGB(170, 185, 205));
+    }
+  }
+}
+
+static inline void drawLightning16(const int x0, const int y0, const uint8_t frame) {
+  const CRGB yel = frame ? CRGB(255, 255, 180) : CRGB(255, 235, 80);
+  const int px[6] = {8, 7, 9, 8, 10, 9};
+  const int py[6] = {8, 10, 10, 12, 12, 14};
+  for (int i = 0; i < 6; i++) blendPixel(x0 + px[i], y0 + py[i], yel);
+}
+
+static inline WeatherIconKind iconFromOpenWeather() {
+  const char c0 = g_icon[0];
+  const char c1 = g_icon[1];
+  if (c0 == '0' && c1 == '1') return WICON_CLEAR;
+  if (c0 == '0' && c1 == '2') return WICON_FEW_CLOUDS;
+  if (c0 == '0' && c1 == '3') return WICON_CLOUDY;
+  if (c0 == '0' && c1 == '4') return WICON_OVERCAST;
+  if (c0 == '0' && c1 == '9') return WICON_HEAVY_RAIN;
+  if (c0 == '1' && c1 == '0') return WICON_RAIN;
+  if (c0 == '1' && c1 == '1') return WICON_THUNDER;
+  if (c0 == '1' && c1 == '3') return WICON_SNOW;
+  if (c0 == '5' && c1 == '0') return WICON_FOG;
+  return WICON_CLOUDY;
+}
+
+static inline void drawWeatherIcon16x16(const int x0, const int y0, const WeatherIconKind kind, const bool night, const uint8_t frame) {
+  const uint8_t darknessPct = night ? 72 : 100;
+
+  switch (kind) {
+    case WICON_CLEAR:
+      if (night) drawMoonPhase16(x0, y0, moonPhaseFromDate(), frame);
+      else drawSun16(x0, y0, frame);
+      break;
+    case WICON_FEW_CLOUDS:
+      if (night) drawMoonPhase16(x0, y0, moonPhaseFromDate(), frame);
+      else drawSun16(x0, y0, frame);
+      drawCloudLayer(x0 + 2, y0 + 2, frame, darknessPct);
+      break;
+    case WICON_CLOUDY:
+      drawCloudLayer(x0 + 1, y0 + 1, frame, darknessPct);
+      break;
+    case WICON_OVERCAST:
+      drawCloudLayer(x0, y0 + 2, frame, darknessPct - 15);
+      drawCloudLayer(x0 + 2, y0, frame, darknessPct - 20);
+      break;
+    case WICON_FOG:
+      drawCloudLayer(x0 + 1, y0, frame, darknessPct);
+      drawFog16(x0, y0, frame);
+      break;
+    case WICON_RAIN:
+      drawCloudLayer(x0 + 1, y0, frame, darknessPct);
+      drawRainDrops16(x0, y0, frame, 4, 2);
+      break;
+    case WICON_HEAVY_RAIN:
+      drawCloudLayer(x0 + 1, y0, frame, darknessPct - 10);
+      drawRainDrops16(x0, y0, frame, 5, 3);
+      break;
+    case WICON_THUNDER:
+      drawCloudLayer(x0 + 1, y0, frame, darknessPct - 10);
+      drawLightning16(x0, y0, frame);
+      drawRainDrops16(x0, y0 + 1, frame, 2, 2);
+      break;
+    case WICON_SNOW:
+      drawCloudLayer(x0 + 1, y0, frame, darknessPct);
+      drawSnow16(x0, y0, frame);
+      break;
+    default:
+      drawCloudLayer(x0 + 1, y0 + 1, frame, darknessPct);
+      break;
   }
 }
 
@@ -531,12 +605,7 @@ static inline void drawDegreeDot2x2(const int x, const int y, const CRGB& col) {
   setPixel(x, y, col); setPixel(x + 1, y, col); setPixel(x, y + 1, col); setPixel(x + 1, y + 1, col);
 }
 
-const Icon16x16PalAnim* pickIcon() {
-  const bool night = (g_icon[2] == 'n');
-  if (g_icon[0] == '0' && g_icon[1] == '1') return night ? &ICON_NIGHT_CLEAR : &ICON_DAY_CLEAR;
-  if ((g_icon[0] == '0' && (g_icon[1] == '9')) || (g_icon[0] == '1' && g_icon[1] == '0')) return night ? &ICON_NIGHT_RAIN : &ICON_DAY_RAIN;
-  return night ? &ICON_NIGHT_CLOUD : &ICON_DAY_CLOUD;
-}
+WeatherIconKind pickIcon() { return iconFromOpenWeather(); }
 
 String stateJson() {
   bool wifi_ok = (WiFi.status() == WL_CONNECTED);
@@ -805,7 +874,8 @@ void renderIfNeeded() {
   int iconX = (textX0 - 16) / 2;
   if (iconX < 0) iconX = 0;
 
-  drawIcon16x16Crossfade(iconX, 1, pickIcon(), alpha8, g_colBg);
+  const WeatherIconKind iconKind = pickIcon();
+  drawWeatherIcon16x16(iconX, 1, iconKind, g_isNight, (alpha8 >= 128) ? 1 : 0);
 
   char ts[8];
   if (t == 99999) strcpy(ts, "--"); else snprintf(ts, sizeof(ts), "%d", t);
