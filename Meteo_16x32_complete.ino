@@ -1,6 +1,3 @@
-// Meteo_16x32 - versione pulita e completa
-// ESP32-WROOM32 + FastLED + WebServer + NVS + NTP + OpenWeather + ArduinoOTA
-// Matrice 16x32 = 2 pannelli 8x32 (alto + basso)
 
 #include <WiFi.h>
 #include <WebServer.h>
@@ -12,9 +9,6 @@
 #include "esp_task_wdt.h"
 #include <ArduinoOTA.h>
 
-// =========================
-// Secrets (metti in secrets.h e non versionare)
-// =========================
 #ifndef WIFI_SSID
 #define WIFI_SSID "eMGi"
 #endif
@@ -34,9 +28,6 @@
 #define OW_LON_DEFAULT "13.44175"
 #endif
 
-// =========================
-// Matrix
-// =========================
 constexpr uint8_t PANEL_W = 32;
 constexpr uint8_t PANEL_H = 8;
 constexpr uint8_t MATRIX_W = 32;
@@ -52,9 +43,6 @@ CRGB leds[NUM_LEDS];
 WebServer server(80);
 Preferences prefs;
 
-// =========================
-// Settings
-// =========================
 uint8_t g_brightness = 18; // 1..255
 CRGB g_colTemp = CRGB(255, 80, 0);
 CRGB g_colHum = CRGB(0, 160, 255);
@@ -129,9 +117,6 @@ enum WeatherIconKind : uint8_t {
   WICON_SNOW
 };
 
-// =========================
-// Utils
-// =========================
 static inline uint8_t hex2b(const char c) {
   if (c >= '0' && c <= '9') return c - '0';
   if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
@@ -252,9 +237,6 @@ static inline uint8_t effectiveBrightness() {
   return static_cast<uint8_t>(b);
 }
 
-// =========================
-// Prefs
-// =========================
 void loadPrefs() {
   prefs.begin("meteo16x32", true);
   g_brightness = prefs.getUChar("br", g_brightness);
@@ -300,9 +282,6 @@ void savePrefs() {
   prefs.end();
 }
 
-// =========================
-// OpenWeather parse (manuale)
-// =========================
 static bool extractJsonNumberC(const char* s, const char* key, float& outVal) {
   const char* k = strstr(s, key); if (!k) return false;
   k = strchr(k, ':'); if (!k) return false;
@@ -572,7 +551,6 @@ static inline void drawWeatherIcon16x16(const int x0, const int y0, const Weathe
   }
 }
 
-// Font 3x5
 const uint8_t font3x5_digits[10][5] = {
   {0b111,0b101,0b101,0b101,0b111},{0b010,0b110,0b010,0b010,0b111},{0b111,0b001,0b111,0b100,0b111},
   {0b111,0b001,0b111,0b001,0b111},{0b101,0b101,0b111,0b001,0b001},{0b111,0b100,0b111,0b001,0b111},
